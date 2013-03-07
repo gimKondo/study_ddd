@@ -1,66 +1,114 @@
+import Data.List
 
--------------------------------------------------
--- study about class and instance
--------------------------------------------------
-class Area a where
-	area :: a -> Double
-data Circle = Circle Double
-instance Area Circle where
-	area (Circle r) = pi * r * r
-data Rectangular = Rectangular Double Double
-	deriving Show
-instance Area Rectangular where
-    area (Rectangular w h) = w * h
--------------------------------------------------
-
+{------------------------------------------
+ - モノ
+ ------------------------------------------}
 -- コンテナの種類
-data ContainerType = Normal | Armored | Sealed
+data ContainerType = Normal | Armored | HighArmored | Sealed
 	deriving (Show, Eq)
 -- コンテナに入れるモノの種類
-data MaterialType = TNT | Sand | BioSpecimen | Ammonia
+data Material = TNT | Gasoline | Sand | BioSpecimen | Ammonia
+	deriving (Show, Eq)
+-- ドラム缶
+data Drum = Drum Material Int 
 	deriving (Show, Eq)
 -- コンテナ
-data Container = Container Int ContainerType [(MaterialType, Int)]
+-- name, ContainerType, [(Material, amount)]
+data Container = Container String ContainerType [Drum]
 	deriving (Show, Eq)
 
--- 
-class Spec a where
-	-- bはaの要求仕様を満たすか？
-	isSatisfiedBy2 :: a -> b -> Bool
 
+{------------------------------------------
+ - Specヘルパ
+ ------------------------------------------}
+-- 特定のMaterialがコンテナに含まれている
+hasMaterialX :: Material -> Container -> Bool
+hasMaterialX a (Container _ _ ms) =  a `elem` [mt | (Drum mt _) <- ms]
 
--- リーフSpec
--- -特定のMaterialTypeがコンテナに含まれている
-hasMaterialX :: MaterialType -> Container -> Bool
-hasMaterialX a (Container _ _ ms) = not . null [a | a <- ms
+-- 特定の条件を満たすMaterialがコンテナに含まれている
+hasConditinalMaterial :: (Material -> Bool) -> Container -> Bool
+hasConditinalMaterial cond (Container _ _ ms) = any cond [mt | (Drum mt _) <- ms]
 
--- -ContainerTypeがXXである
+-- ContainerTypeがXXである
 isContainerTypeX :: ContainerType -> Container -> Bool
 isContainerTypeX a (Container _ ct _) = a == ct 
 
--- -コンテナ内に含まれる量がXX未満である
+-- コンテナ内に含まれる量がXXをオーバーしている
+isOverAmount :: Material -> Int -> Container -> Bool
+isOverAmount mt limit (Container _ _ ms) = limit <  amount
+	where amount = sum [v | (Drum trg_mt v) <- ms, trg_mt == mt]
 
--- 強化コンテナか？
-isArmored (_,Armored,_) = True
-isArmored otherwise = False
-
--- Explosiveが含まれてないか？
-isContainExplosive (_,_,c) = not . null $ filter isExplosive c
-
--- 
-isExplosive (TNT,_) = True
+-- 爆発物か？
+isExplosive :: Material -> Bool
+isExplosive TNT = True
+isExplosive Gasoline = True
 isExplosive otherwise = False
 
--- container spec
-isSatisfiedBy :: MaterialType -> (Int,ContainerType,[(MaterialType,Int)]) -> Bool
-isSatisfiedBy TNT = isArmored
-isSatisfiedBy BioSpecimen = not . isContainExplosive
+{------------------------------------------
+ - リーフSpec
+ ------------------------------------------}
+-- TNTが入っていないか？
+containTNT :: Container -> Bool
+containTNT container = hasMaterialX TNT container
 
+-- 爆発物が入っていないか？
+containExplosive :: Container -> Bool
+containExplosive container = hasConditinalMaterial isExplosive container
+
+-- 強化コンテナか？
+isArmored :: Container -> Bool
+isArmored container = isContainerTypeX Armored container
+
+-- 高度強化コンテナか？
+isHighArmored :: Container -> Bool
+isHighArmored container = isContainerTypeX HighArmored container
+
+-- 密閉コンテナか？
+isSealed :: Container -> Bool
+isSealed container = isContainerTypeX Sealed container
+
+-- コンテナ内に200以上入っていないか？
+isOverAmount200 :: Container -> Material -> Bool
+isOverAmount200 container mt = isOverAmount mt 200 container
+
+{------------------------------------------
+ - 各Materialの要求仕様
+ ------------------------------------------}
+-- container spec
+isSatisfiedBy :: Material -> Container -> Bool
+-- TNTは強化コンテナまたは高度強化コンテナに入っている必要がある
+isSatisfiedBy TNT c = or [isArmored c, isHighArmored c]
+-- Gasolineは高度強化コンテナが必要で、TNTと一緒に入れてはダメで、200以上入れてもダメ
+isSatisfiedBy Gasoline c = and [isHighArmored c, (not . containTNT) c, isOverAmount200 c Gasoline]
+-- Sandは委細気にせず
+isSatisfiedBy Sand _ = True
+-- BioSpecimenは爆発物と一緒はダメ
+isSatisfiedBy BioSpecimen c = containExplosive c
+-- Ammoniaは密閉コンテナでなければダメ
+isSatisfiedBy Ammonia c = isSealed c
+
+
+{------------------------------------------
+ - 各Materialの要求仕様を満たしていない状態の
+ - コンテナの名前を晒す
+ ------------------------------------------}
+discloseWrongContainer :: [Container] -> [String]
+discloseWrongContainer cs = nub [name | (Container name _ [Drum mt _]) <- cs, c <- cs, isSatisfiedBy mt c]
+
+{------------------------------------------
+ - コンテナリスト
+ ------------------------------------------}
+containers = [	 Container "Iro" Normal [(Drum TNT 30), (Drum Sand 20)]
+				,Container "Ha"  HighArmored [(Drum Gasoline 20), (Drum Gasoline 80)]
+				,Container "Niwo" Normal [(Drum Ammonia 30), (Drum Sand 100)]
+				,Container "Chiri" Normal [(Drum Sand 10)] ]
+
+{------------------------------------------
+ - 
+ ------------------------------------------}
 main = do
-	print $ Container 3 Normal [(TNT, 30), (Sand, 20), (BioSpecimen, 50)]
-	print $ Rectangular 10.0 10.0
-	let c1 = (0, Armored, [(TNT, 10), (Sand, 20)])
-	print $ isSatisfiedBy TNT c1
-	print $ isSatisfiedBy BioSpecimen c1
+	putStrLn $ unlines $ map show containers
+	putStrLn $ unlines $ discloseWrongContainer containers
+	
 
 
