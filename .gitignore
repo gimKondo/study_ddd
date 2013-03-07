@@ -1,0 +1,6 @@
+# ignore tmporary file
+*.swp
+
+#ignore backup file
+*~
+*.bak
