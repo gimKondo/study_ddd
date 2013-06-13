@@ -4,3 +4,8 @@
 #ignore backup file
 *~
 *.bak
+
+#ignore VS 
+*.suo
+bin/
+obj/
